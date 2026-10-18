@@ -5388,7 +5388,12 @@ async function accEnter(raw, create) {
   if (create && r.ok) { msg("Cet identifiant est déjà pris. Choisis-en un autre, ou connecte-toi s'il est à toi."); if (btn) { btn.disabled = false; btn.textContent = "Créer mon compte"; } return; }
   ACC.id = id; try { localStorage.setItem("atelier-account", id); } catch (e) {}
   if (create) { S.updatedAt = Date.now(); await accPush(); }
-  else { const j = await r.json(); S = migrate(j.data); S.updatedAt = j.updatedAt; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  else {
+    const j = await r.json();
+    // une progression plus récente sur cet appareil n'est jamais écrasée : c'est elle qu'on envoie
+    if ((S.answered || 0) > 0 && (S.updatedAt || 0) > (j.updatedAt || 0)) await accPush();
+    else { S = migrate(j.data); S.updatedAt = j.updatedAt; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  }
   ACC.last = Date.now(); TAB = "home";
   render();
   toast(create ? "Compte « " + id + " » créé. Ta progression y est enregistrée automatiquement." : "Bon retour, " + id + " ! Ta progression est chargée.");
@@ -5407,8 +5412,8 @@ function renderLogin(create) {
     <div class="loginbox">
       <span class="eyebrow">Atelier d'anglais</span>
       <h1>${create ? "Créer un compte" : "Connexion"}</h1>
-      <label for="loginid" class="small muted">${create ? "Choisis ton identifiant" : "Notez votre identifiant"}</label>
-      <input id="loginid" class="field" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${create ? "Ex. : maelhingant" : "Votre identifiant"}">
+      <label for="loginid" class="small muted">${create ? "Ton identifiant : prénom + nom attachés, en minuscules" : "Notez votre identifiant (prénom + nom attachés, en minuscules)"}</label>
+      <input id="loginid" class="field" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="ex. : maelhingant">
       <button class="btn primary block" id="loginbtn">${create ? "Créer mon compte" : "Se connecter"}</button>
       <p class="small loginmsg" id="loginmsg" hidden></p>
       <p class="small muted">${create ? "Juste un identifiant, sans mot de passe : garde-le pour toi." : "Pas encore de compte ?"} <button class="toggle" id="loginswap" type="button">${create ? "J'ai déjà un compte" : "Créer un compte"}</button></p>
@@ -5416,6 +5421,8 @@ function renderLogin(create) {
   const go2 = () => accEnter($("#loginid").value, create);
   $("#loginbtn").onclick = go2;
   $("#loginid").onkeydown = e => { if (e.key === "Enter") go2(); };
+  // toujours en minuscules, sans espace ni accent
+  $("#loginid").oninput = e => { const v = accClean(e.target.value); if (v !== e.target.value) e.target.value = v; };
   $("#loginswap").onclick = () => renderLogin(!create);
   setTimeout(() => $("#loginid")?.focus(), 50);
 }
