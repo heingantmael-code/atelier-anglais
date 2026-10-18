@@ -151,7 +151,7 @@ function renderLogin(create) {
       <span class="eyebrow">Atelier d'anglais</span>
       <h1>${create ? "Créer un compte" : "Connexion"}</h1>
       <label for="loginid" class="small muted">${create ? "Ton identifiant : prénom + nom attachés, en minuscules" : "Notez votre identifiant (prénom + nom attachés, en minuscules)"}</label>
-      <input id="loginid" class="field" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="ex. : maelhingant">
+      <input id="loginid" class="field" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="prenomnom">
       <button class="btn primary block" id="loginbtn">${create ? "Créer mon compte" : "Se connecter"}</button>
       <p class="small loginmsg" id="loginmsg" hidden></p>
       <p class="small muted">${create ? "Juste un identifiant, sans mot de passe : garde-le pour toi." : "Pas encore de compte ?"} <button class="toggle" id="loginswap" type="button">${create ? "J'ai déjà un compte" : "Créer un compte"}</button></p>
