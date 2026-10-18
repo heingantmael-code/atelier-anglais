@@ -33,7 +33,7 @@ bash build.sh
 ## Régénérer l'audio
 
 ```bash
-node tools/export_speech.js src          # liste de tout ce qui doit être lu
+node tools/export_speech.cjs src          # liste de tout ce qui doit être lu
 python tools/gen_audio.py src worker 0 1 # enregistrements (Kokoro)
 python tools/verify_audio.py src         # réécoute par Whisper
 python tools/gen_audio.py src pack       # paquets dans src/audio/
