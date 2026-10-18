@@ -1051,6 +1051,32 @@ function openReader(t) {
   $(".reader").onclick = e => { const b = e.target.closest(".rw"); if (b) tapWord(+b.dataset.i, b); };
   $("#rdone").onclick = () => { hush(); readQuestions(); };
 }
+// Rend un texte anglais « touchable » : chaque mot affiche sa traduction (et peut être écouté)
+function tapHTML(text) {
+  const toks = tokenize(text); let html = "<p>";
+  toks.forEach((tk, i) => { html += tk.br ? "</p><p>" : `<button class="rw" type="button" data-ti="${i}">${esc(tk.w)}</button> `; });
+  return {toks, html: html + "</p>"};
+}
+function ensurePop() { let p = $("#pop"); if (!p) { document.body.insertAdjacentHTML("beforeend", `<div class="pop" id="pop" hidden></div>`); p = $("#pop"); } return p; }
+function wireTap(container, toks, gloss) {
+  container.onclick = async e => {
+    const b = e.target.closest(".rw"); if (!b) return;
+    e.stopPropagation();
+    const i = +b.dataset.ti, r = lookup(toks, i, gloss || {}); if (!r) return;
+    $$(".rw.sel").forEach(x => x.classList.remove("sel")); b.classList.add("sel");
+    speak(r.term, .95);
+    const pop = ensurePop(); pop.hidden = false;
+    const paint = (fr, note) => { pop.innerHTML = `<div class="in"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><b class="popw">${esc(r.term)}</b><button class="btn sm ghost" id="pclose" aria-label="Fermer">✕</button></div><div class="popfr">${fr ? esc(fr) : `<span class="muted">${esc(note || "Pas de traduction disponible pour ce mot.")}</span>`}</div></div>`; $("#pclose").onclick = closePop; };
+    if (r.fr) { paint(r.fr); if (!r.func && !S.mine.some(w => w.en === r.term)) { S.mine.unshift({en: r.term, fr: r.fr}); if (S.mine.length > 500) S.mine.length = 500; save(); } return; }
+    if (!aiReady()) { paint(null); return; }
+    paint(null, "Traduction en cours…");
+    const sentence = toks.slice(Math.max(0, i - 12), i + 12).map(x => x.w || "").join(" ");
+    try {
+      const res = await sample.json(`Traduis le mot anglais « ${r.term} » tel qu'il est employé dans ce passage : « ${sentence} ». Réponds UNIQUEMENT en JSON : {"fr":"traduction française courte (2 à 5 mots)"}`, {modelTier: "quick"});
+      const fr = String(res && res.fr || "").trim(); if (gloss && fr) gloss[r.term] = fr; paint(fr || null);
+    } catch (er) { paint(null, aiErr(er) || "Pas de traduction."); }
+  };
+}
 function closePop() { const p = $("#pop"); if (p) p.hidden = true; }
 async function tapWord(i, btn) {
   const t = READ.t, r = lookup(READ.toks, i, t.gloss);
@@ -1388,10 +1414,23 @@ async function freeCheck(it, v, answers, info, task) {
 }
 const EX = {
   rmcq(it, ex) {
-    ex.insertAdjacentHTML("beforeend", `<div class="reader small" style="font-size:1rem;max-height:40vh;overflow:auto"><b>${esc(it.title)}</b>${it.text.split(/\n+/).map(p => `<p>${esc(p)}</p>`).join("")}</div>`);
-    choiceUI(ex, `<p class="prompt">${esc(it.q)}</p>`, it.o, it.a, i => grade(i === it.a, {sol: it.o[it.a], user: it.o[i]}));
+    const T = tapHTML(it.text), Q = tapHTML(it.q);
+    ex.insertAdjacentHTML("beforeend", `<p class="small muted">Touche un mot pour voir sa traduction.</p><div class="reader small" id="rtext" style="font-size:1rem;max-height:40vh;overflow:auto"><b>${esc(it.title)}</b>${T.html}</div>`);
+    choiceUI(ex, `<div class="prompt tapq" id="rq">${Q.html}</div>`, it.o, it.a, i => { closePop(); grade(i === it.a, {sol: it.o[it.a], user: it.o[i]}); });
+    const gl = (TEXTS.find(t => t.text === it.text) || {}).gloss || {};
+    wireTap($("#rtext"), T.toks, gl); wireTap($("#rq"), Q.toks, gl);
   },
   mcq(it, ex) {
+    if (it.noSay && /^[A-Z]/.test(it.q) && /[a-z]/.test(it.q) && !/[éèàçù]/.test(it.q)) {
+      const Q = tapHTML(it.q), src = (it.key || "").split(":")[1];
+      const gl = (TEXTS.find(t => t.id === src) || S.aitexts.find(t => t.id === src) || {}).gloss || {};
+      choiceUI(ex, `<div class="prompt tapq" id="mq">${Q.html}</div><p class="small muted">Touche un mot de la question pour le traduire.</p>`, it.o, it.a, i => { closePop(); grade(i === it.a, {sol: it.o[it.a], user: it.o[i]}); });
+      wireTap($("#mq"), Q.toks, gl);
+      // pendant les questions d'une lecture, on peut revoir le texte (lui aussi touchable)
+      const txt = SES.kind === "read" && allTexts().find(t => t.id === SES.text);
+      if (txt) { const T = tapHTML(txt.text); ex.insertAdjacentHTML("beforeend", `<details class="rule"><summary>Revoir le texte</summary><div class="reader small" id="rtext2" style="font-size:1rem;margin-top:8px">${T.html}</div></details>`); wireTap($("#rtext2"), T.toks, txt.gloss); }
+      return;
+    }
     choiceUI(ex, `<p class="prompt">${esc(it.q)}</p>`, it.o, it.a, i => { if (!it.noSay && /^[A-Za-z]/.test(it.o[it.a])) speak(it.o[it.a]); grade(i === it.a, {sol: it.o[it.a], user: it.o[i]}); });
   },
   v(it, ex) {
@@ -1618,6 +1657,7 @@ function describePlain(it) {
   return "répéter « " + (it.en || "") + " »";
 }
 function nextItem() {
+  closePop();
   if (explainCtl) { explainCtl.abort(); explainCtl = null; }
   const fb = $("#fb"); if (fb) fb.remove();
   hush(); stopListening();
@@ -1744,7 +1784,7 @@ function evalItem(sec, li, used) {
   if (sec === "read") {
     const t = pick(nearBand(TEXTS, x => x.lvl, li)); const q = pick(t.q);
     const order = shuffle(q.o.map((o, i) => i));
-    return {t: "rmcq", text: t.text, title: t.title, q: q.q, o: order.map(i => q.o[i]), a: order.indexOf(q.a || 0), key: "rq:" + t.id + ":" + q.q, skill: "read", lvl: t.lvl, noSay: true, noMist: true};
+    return {t: "rmcq", tid: t.id, text: t.text, title: t.title, q: q.q, o: order.map(i => q.o[i]), a: order.indexOf(q.a || 0), key: "rq:" + t.id + ":" + q.q, skill: "read", lvl: t.lvl, noSay: true, noMist: true};
   }
   // expression : traduire une phrase française en anglais (clavier ou micro)
   const us = nearBand(UNITS.filter(u => !u.gen), u => u.lvl, li);
