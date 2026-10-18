@@ -1,0 +1,8 @@
+{
+  "name": "atelier-anglais",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vercel/blob": "latest"
+  }
+}

@@ -1,0 +1,7 @@
+.vercel
+.env*
+node_modules
+src/clips/
+src/audio/
+src/speech_list.json
+src/verify_*.json
